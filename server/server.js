@@ -1,31 +1,3 @@
-// // server/index.js
-// const express = require("express");
-// const http = require("http");
-// const cors = require("cors");
-// const { Server } = require("socket.io");
-
-// const app = express();
-// app.use(cors());
-// const server = http.createServer(app);
-
-// const io = new Server(server, {
-//   cors: {
-//     origin: "*", // In dev: allow all
-//     methods: ["GET", "POST"],
-//   },
-// });
-
-// io.on("connection", (socket) => {
-//   console.log("New client connected:", socket.id);
-//   socket.on("peerId", (data) => {
-//     socket.broadcast.emit("peerId", data);
-//   });
-// });
-
-// server.listen(4000, () => {
-//   console.log("Server listening on http://localhost:4000");
-// });
-
 // server/index.js
 const express = require("express");
 const http = require("http");
@@ -38,7 +10,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*", // In dev: allow all
+    origin: "https://40aecaa609b7.ngrok-free.app", // In dev: allow all
     methods: ["GET", "POST"],
   },
 });
@@ -56,13 +28,8 @@ io.on("connection", (socket) => {
     socketToPeerIdMap.set(socket.id, peerId); // Store the mapping
     activePeerIds.add(peerId); // Add to the set of active peer IDs
 
-    // 1. Send the newly connected peer's ID to all *other* clients
-    // This allows existing clients to discover the new one.
     socket.broadcast.emit("peerIdAvailable", peerId);
 
-    // 2. Send all *currently active* peer IDs to the *newly connected* client
-    // This allows the new client to discover all existing clients.
-    // Filter out the client's own peerId
     const otherActiveIds = Array.from(activePeerIds).filter(
       (id) => id !== peerId
     );
@@ -94,7 +61,9 @@ io.on("connection", (socket) => {
     socket.emit("activePeerIds", others);
   });
 });
-
+app.get("/", (req, res) => {
+  res.send("app running here");
+});
 server.listen(4000, () => {
   console.log("Server listening on http://localhost:4000");
 });

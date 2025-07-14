@@ -6,6 +6,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    allowedHosts: [
+      "40aecaa609b7.ngrok-free.app",
+      "c9f9a38b4c64.ngrok-free.app",
+    ],
   },
   base: "/simple-peer/",
 });

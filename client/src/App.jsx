@@ -1,239 +1,117 @@
-// import React, { useEffect, useMemo, useRef, useState } from "react";
-// import Peer from "peerjs"; // ✅ Correct default import
-// import "./App.css";
-// import { io } from "socket.io-client";
-// const socket = io("https://localhost:4000", {
-//   transports: ["websockets"],
-// });
-// export default function App() {
-//   const [peerId, setPeerId] = useState("");
-//   const [remotePeerId, setRemotePeerId] = useState("");
-//   const peerRef = useRef(null);
-//   const localVideoRef = useRef(null);
-//   const remoteVideoRef = useRef(null);
-//   const localStreamRef = useRef(null);
-
-//   useEffect(() => {
-//     const peer = new Peer(); // 👈 Create peer instance
-//     peerRef.current = peer;
-
-//     // Show my peer ID
-//     peer.on("open", (id) => {
-//       console.log("My peer ID:", id);
-//       setPeerId(id);
-//       socket.emit("peerId", id);
-//     });
-
-//     // Listen for incoming call
-//     peer.on("call", async (call) => {
-//       try {
-//         const stream = await navigator.mediaDevices.getUserMedia({
-//           video: true,
-//           audio: true,
-//         });
-//         localStreamRef.current = stream;
-//         localVideoRef.current.srcObject = stream;
-//         localVideoRef.current.play();
-
-//         call.answer(stream); // ✅ Answer with your stream
-
-//         call.on("stream", (remoteStream) => {
-//           remoteVideoRef.current.srcObject = remoteStream;
-//           remoteVideoRef.current.play();
-//         });
-//       } catch (err) {
-//         console.error("Error accessing media for incoming call:", err);
-//       }
-//       socket.on("peerId", (id) => {
-//         setRemotePeerId(id);
-//       });
-//       return () => {};
-//     });
-//   }, []);
-
-//   // Call another peer
-//   const Call = async (id) => {
-//     try {
-//       const stream = await navigator.mediaDevices.getUserMedia({
-//         video: true,
-//         audio: true,
-//       });
-//       localStreamRef.current = stream;
-//       localVideoRef.current.srcObject = stream;
-
-//       const call = peerRef.current.call(id, stream);
-
-//       call.on("stream", (remoteStream) => {
-//         remoteVideoRef.current.srcObject = remoteStream;
-//         remoteVideoRef.current.play();
-//       });
-//     } catch (err) {
-//       console.error("Failed to make call:", err);
-//     }
-//   };
-
-//   return (
-//     <div>
-//       <h3>My Peer ID: {peerId}</h3>
-//       <button onClick={() => Call(remotePeerId)}>Call</button>
-
-//       <div className="video-parent" style={{ display: "flex", gap: "20px" }}>
-//         <div>
-//           <h4>Local Video</h4>
-//           <video ref={localVideoRef} playsInline muted autoPlay width={300} />
-//         </div>
-//         <div>
-//           <h4>Remote Video</h4>
-//           <video ref={remoteVideoRef} playsInline autoPlay width={300} />
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-// App.jsx
-// App.jsx
 import React, { useEffect, useRef, useState } from "react";
 import Peer from "peerjs";
-import "./App.css"; // Assuming you have some basic CSS
+import "./App.css";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:4000", {
+// Backend signaling server (your ngrok or hosted server)
+const url = "https://c9f9a38b4c64.ngrok-free.app";
+const socket = io(url, {
   transports: ["websocket"],
 });
 
 export default function App() {
   const [myPeerId, setMyPeerId] = useState("");
-  const [availablePeers, setAvailablePeers] = useState([]); // Stores peer IDs discovered from server
-  const [callingToId, setCallingToId] = useState(null); // The ID we are currently trying to call
+  const [availablePeers, setAvailablePeers] = useState([]);
+  const [callingToId, setCallingToId] = useState(null);
 
   const peerRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
-  const localStreamRef = useRef(null); // To store the local media stream
+  const localStreamRef = useRef(null);
 
   useEffect(() => {
-    // 1. Initialize PeerJS
-    const peer = new Peer();
+    const peer = new Peer({
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          {
+            urls: "turn:numb.viagenie.ca",
+            credential: "muazkh",
+            username: "webrtc@live.com",
+          },
+        ],
+      },
+    });
+
     peerRef.current = peer;
 
     peer.on("open", (id) => {
-      console.log("My Peer ID:", id);
       setMyPeerId(id);
-      socket.emit("peerId", id); // Register my Peer ID with the signaling server
+      socket.emit("peerId", id);
     });
 
-    // 2. Listen for incoming calls
     peer.on("call", async (call) => {
-      console.log("Incoming call from:", call.peer);
-      // Prompt user to accept/reject call (optional, but good practice)
-      const acceptCall = window.confirm(
-        `Incoming call from ${call.peer}. Do you want to accept?`
-      );
+      if (!window.confirm(`Incoming call from ${call.peer}. Accept?`)) {
+        call.close();
+        return;
+      }
 
-      if (acceptCall) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-          localStreamRef.current = stream;
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        localStreamRef.current = stream;
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play();
 
-          call.answer(stream); // Answer with your stream
+        call.answer(stream);
 
-          call.on("stream", (remoteStream) => {
-            console.log("Receiving remote stream from incoming call.");
-            remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play();
-          });
+        call.on("stream", (remoteStream) => {
+          remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current.play();
+        });
 
-          call.on("close", () => {
-            console.log("Incoming call ended.");
-            cleanupStreamsAndVideos();
-          });
-
-          call.on("error", (err) => {
-            console.error("Incoming call error:", err);
-            cleanupStreamsAndVideos();
-          });
-        } catch (err) {
-          console.error("Error accessing media for incoming call:", err);
-          alert("Could not access camera/microphone to answer the call.");
-        }
-      } else {
-        console.log("Call rejected.");
-        call.close(); // Decline the call
+        call.on("close", cleanupStreamsAndVideos);
+        call.on("error", cleanupStreamsAndVideos);
+      } catch (err) {
+        console.error("Media error:", err);
+        alert("Could not access camera/mic.");
       }
     });
 
-    peer.on("error", (err) => {
-      console.error("PeerJS error:", err);
-    });
+    peer.on("error", (err) => console.error("PeerJS error:", err));
 
-    // 3. Listen for other available peers from the signaling server
     socket.on("peerIdAvailable", (id) => {
-      // Add a new peer ID to the list if it's not our own
       if (id !== myPeerId && !availablePeers.includes(id)) {
-        setAvailablePeers((prevPeers) => [...prevPeers, id]);
-        console.log("New peer available:", id);
+        setAvailablePeers((prev) => [...prev, id]);
       }
     });
 
-    // 4. Listen for a list of active peers from the server (on initial connect)
     socket.on("activePeerIds", (ids) => {
-      // Filter out our own ID and update the list
-      const filteredIds = ids.filter((id) => id !== myPeerId);
-      setAvailablePeers(filteredIds);
-      console.log("Initial active peers:", filteredIds);
+      const filtered = ids.filter((id) => id !== myPeerId);
+      setAvailablePeers(filtered);
     });
 
-    // 5. Listen for peers disconnecting
     socket.on("peerIdUnavailable", (id) => {
-      setAvailablePeers((prevPeers) => prevPeers.filter((peer) => peer !== id));
-      console.log("Peer disconnected:", id);
-      // If the disconnected peer was the one we were calling, reset call state
+      setAvailablePeers((prev) => prev.filter((pid) => pid !== id));
       if (callingToId === id) {
-        setCallingToId(null);
-        cleanupStreamsAndVideos();
-        alert(`The peer ${id} you were connected to has disconnected.`);
+        alert(`Peer ${id} disconnected`);
+        hangUp();
       }
     });
 
-    // Cleanup function for useEffect
     return () => {
-      if (peerRef.current) {
-        peerRef.current.destroy();
-      }
+      peerRef.current?.destroy();
+      cleanupStreamsAndVideos();
       socket.off("peerIdAvailable");
       socket.off("activePeerIds");
       socket.off("peerIdUnavailable");
-      cleanupStreamsAndVideos();
     };
-  }, []); // Dependencies for useEffect
+  }, []);
 
-  // Helper function to stop tracks and clear video elements
   const cleanupStreamsAndVideos = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-    }
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    setCallingToId(null);
   };
 
-  // Function to initiate a call
   const startCall = async (remotePeerId) => {
-    if (!remotePeerId || remotePeerId === myPeerId) {
-      alert("Invalid Peer ID to call or trying to call yourself.");
-      return;
-    }
+    if (!remotePeerId || remotePeerId === myPeerId)
+      return alert("Invalid peer ID.");
 
-    setCallingToId(remotePeerId); // Indicate who we are calling
+    setCallingToId(remotePeerId);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -242,91 +120,55 @@ export default function App() {
       });
       localStreamRef.current = stream;
       localVideoRef.current.srcObject = stream;
-      localVideoRef.current.play(); // Play local video immediately
+      localVideoRef.current.play();
 
       const call = peerRef.current.call(remotePeerId, stream);
-      console.log("Initiating call to:", remotePeerId);
-
       call.on("stream", (remoteStream) => {
-        console.log("Receiving remote stream after initiating call.");
         remoteVideoRef.current.srcObject = remoteStream;
         remoteVideoRef.current.play();
       });
-
-      call.on("close", () => {
-        console.log("Outgoing call ended.");
-        cleanupStreamsAndVideos();
-        setCallingToId(null);
-      });
-
+      call.on("close", cleanupStreamsAndVideos);
       call.on("error", (err) => {
-        console.error("Outgoing call error:", err);
+        console.error("Call error:", err);
         cleanupStreamsAndVideos();
-        setCallingToId(null);
-        alert(`Call to ${remotePeerId} failed: ${err.message}`);
       });
     } catch (err) {
-      console.error("Failed to access media or make call:", err);
-      alert(
-        "Failed to access camera/microphone or make call. Check console for details."
-      );
-      setCallingToId(null);
+      console.error("Call failed:", err);
+      alert("Failed to start call.");
       cleanupStreamsAndVideos();
     }
   };
 
-  // Function to hang up
   const hangUp = () => {
-    console.log("Hanging up...");
-    // PeerJS automatically closes the call when the connection is destroyed
-    // or when the other peer closes. For explicit hangup, you'd manage call objects.
-    // For simplicity here, we'll just clean up streams and videos.
     cleanupStreamsAndVideos();
-    setCallingToId(null);
-    if (peerRef.current) {
-      // A more robust hangup would involve closing the specific 'call' object
-      // if you stored it. For now, cleaning up streams is sufficient to end visuals.
-      // If you only have one call at a time, creating a 'currentCallRef' might be useful.
-    }
   };
 
   return (
     <div className="App">
       <h1>Automated Video Call 📞</h1>
-      <hr />
       <h3>
         My Peer ID:{" "}
         <span style={{ color: "blue" }}>{myPeerId || "Connecting..."}</span>
       </h3>
-      <p>
-        Share this ID with someone to let them call you, or choose from
-        available peers below.
-      </p>
       <hr />
 
       {availablePeers.length > 0 ? (
-        <div>
-          <h4>Available Peers to Call:</h4>
-          <ul>
-            {availablePeers.map((peerId) => (
-              <li key={peerId}>
-                {peerId}
-                <button
-                  onClick={() => startCall(peerId)}
-                  disabled={!!callingToId} // Disable if already calling
-                  style={{ marginLeft: "10px" }}
-                >
-                  {callingToId === peerId ? "Calling..." : "Call Now"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul>
+          {availablePeers.map((peerId) => (
+            <li key={peerId}>
+              {peerId}
+              <button
+                onClick={() => startCall(peerId)}
+                disabled={!!callingToId}
+                style={{ marginLeft: "10px" }}
+              >
+                {callingToId === peerId ? "Calling..." : "Call Now"}
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : (
-        <p>
-          No other peers online yet. Open another tab or wait for someone to
-          join.
-        </p>
+        <p>No peers available. Try opening another tab.</p>
       )}
 
       {callingToId && (
@@ -345,10 +187,7 @@ export default function App() {
         </button>
       )}
 
-      <hr />
-
       <div
-        className="video-parent"
         style={{
           display: "flex",
           gap: "20px",
@@ -360,19 +199,19 @@ export default function App() {
           <h4>Local Video 🤳</h4>
           <video
             ref={localVideoRef}
-            playsInline
             muted
             autoPlay
+            playsInline
             width={300}
             style={{ border: "1px solid gray", background: "#f0f0f0" }}
           />
         </div>
         <div>
-          <h4>Remote Video 🗣️</h4>
+          <h4>Remote Video 📽️</h4>
           <video
             ref={remoteVideoRef}
-            playsInline
             autoPlay
+            playsInline
             width={300}
             style={{ border: "1px solid gray", background: "#f0f0f0" }}
           />
